@@ -1,26 +1,3 @@
-// COMPLETE FLUTTER CASH BOOK APP
-// 
-// Project Structure:
-// lib/
-//   main.dart (this file)
-//   models/
-//     transaction_model.dart
-//     category_model.dart
-//   services/
-//     database_service.dart
-//   screens/
-//     dashboard_screen.dart
-//     add_transaction_screen.dart
-//     transactions_screen.dart
-//     categories_screen.dart
-//     reports_screen.dart
-//   widgets/
-//     transaction_card.dart
-//     chart_widget.dart
-
-// ============================================================================
-// MAIN.DART
-// ============================================================================
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as path_package;
@@ -45,10 +22,7 @@ class CashBookApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Cash Book',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
+      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
       home: const DashboardScreen(),
       debugShowCheckedModeBanner: false,
     );
@@ -65,7 +39,6 @@ class TransactionModel {
   final double amount;
   final String category;
   final String description;
-  final String? productName; // NEW: Product/Item name
   final DateTime date;
 
   TransactionModel({
@@ -74,7 +47,6 @@ class TransactionModel {
     required this.amount,
     required this.category,
     required this.description,
-    this.productName,
     required this.date,
   });
 
@@ -85,7 +57,6 @@ class TransactionModel {
       'amount': amount,
       'category': category,
       'description': description,
-      'productName': productName,
       'date': date.toIso8601String(),
     };
   }
@@ -97,7 +68,6 @@ class TransactionModel {
       amount: map['amount'],
       category: map['category'],
       description: map['description'],
-      productName: map['productName'],
       date: DateTime.parse(map['date']),
     );
   }
@@ -136,7 +106,7 @@ class DatabaseService {
     String path = path_package.join(await getDatabasesPath(), 'cashbook.db');
     return await openDatabase(
       path,
-      version: 2, // Incremented version for migration
+      version: 1,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE transactions(
@@ -145,15 +115,9 @@ class DatabaseService {
             amount REAL NOT NULL,
             category TEXT NOT NULL,
             description TEXT,
-            productName TEXT,
             date TEXT NOT NULL
           )
         ''');
-      },
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
-          await db.execute('ALTER TABLE transactions ADD COLUMN productName TEXT');
-        }
       },
     );
   }
@@ -175,6 +139,17 @@ class DatabaseService {
   Future<int> deleteTransaction(int id) async {
     final db = await database;
     return await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // Update an existing transaction
+  Future<int> updateTransaction(TransactionModel transaction) async {
+    final db = await database;
+    return await db.update(
+      'transactions',
+      transaction.toMap(),
+      where: 'id = ?',
+      whereArgs: [transaction.id],
+    );
   }
 
   Future<Map<String, double>> getSummary() async {
@@ -237,31 +212,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _buildDashboard(),
       const TransactionsScreen(),
       const ReportsScreen(),
-      const ProductAnalyticsScreen(), // NEW: Product Analytics
+      const CategoryAnalyticsScreen(), // Changed from ProductAnalyticsScreen
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cash Book'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Cash Book'), elevation: 0),
       body: screens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) => setState(() => _selectedIndex = index),
         type: BottomNavigationBarType.fixed,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
-          BottomNavigationBarItem(icon: Icon(Icons.list), label: 'Transactions'),
-          BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Reports'),
-          BottomNavigationBarItem(icon: Icon(Icons.shopping_bag), label: 'Products'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.list),
+            label: 'Transactions',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart),
+            label: 'Reports',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.category),
+            label: 'Categories',
+          ), // Changed icon and label
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           await Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const AddTransactionScreen()),
+            MaterialPageRoute(
+              builder: (context) => const AddTransactionScreen(),
+            ),
           );
           _loadData();
         },
@@ -357,10 +343,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Text(
                   title,
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey[700], fontSize: 14),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -441,9 +424,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return Card(
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: trans.type == 'income'
-                  ? Colors.green.withOpacity(0.2)
-                  : Colors.red.withOpacity(0.2),
+              backgroundColor:
+                  trans.type == 'income'
+                      ? Colors.green.withOpacity(0.2)
+                      : Colors.red.withOpacity(0.2),
               child: Icon(
                 trans.type == 'income' ? Icons.add : Icons.remove,
                 color: trans.type == 'income' ? Colors.green : Colors.red,
@@ -476,11 +460,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 // ============================================================================
-// ADD TRANSACTION SCREEN
+// ADD TRANSACTION SCREEN (PRODUCT FIELD REMOVED)
 // ============================================================================
 
 class AddTransactionScreen extends StatefulWidget {
-  const AddTransactionScreen({Key? key}) : super(key: key);
+  final TransactionModel? transaction;
+  const AddTransactionScreen({Key? key, this.transaction}) : super(key: key);
 
   @override
   State<AddTransactionScreen> createState() => _AddTransactionScreenState();
@@ -490,18 +475,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _descController = TextEditingController();
-  final _productController = TextEditingController(); // NEW: Product field
   final DatabaseService _dbService = DatabaseService();
 
   String _type = 'income';
   String _category = 'Sales';
   DateTime _selectedDate = DateTime.now();
+  bool get isEditing => widget.transaction != null;
 
   List<String> incomeCategories = [
     'Sales',
     'Service',
     'Investment',
-    'Add Custom Category...'
+    'Add Custom Category...',
   ];
   List<String> expenseCategories = [
     'Rent',
@@ -509,18 +494,35 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     'Fuel',
     'Utilities',
     'Supplies',
-    'Add Custom Category...'
+    'Add Custom Category...',
   ];
-  
+
   final List<String> customIncomeCategories = [];
   final List<String> customExpenseCategories = [];
 
   @override
+  void initState() {
+    super.initState();
+    final t = widget.transaction;
+    if (t != null) {
+      _type = t.type;
+      _category = t.category;
+      _selectedDate = t.date;
+      _amountController.text = t.amount.toStringAsFixed(2);
+      _descController.text = t.description;
+      // if category is not in default lists, add to custom lists so dropdown can show it
+      if (_type == 'income' && !incomeCategories.contains(_category)) {
+        customIncomeCategories.add(_category);
+      } else if (_type == 'expense' && !expenseCategories.contains(_category)) {
+        customExpenseCategories.add(_category);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Transaction'),
-      ),
+      appBar: AppBar(title: const Text('Add Transaction')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -571,11 +573,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   labelText: 'Category',
                   border: OutlineInputBorder(),
                 ),
-                items: (_type == 'income' 
-                    ? [...incomeCategories, ...customIncomeCategories]
-                    : [...expenseCategories, ...customExpenseCategories])
-                    .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
-                    .toList(),
+                items:
+                    (_type == 'income'
+                            ? [...incomeCategories, ...customIncomeCategories]
+                            : [
+                              ...expenseCategories,
+                              ...customExpenseCategories,
+                            ])
+                        .map(
+                          (cat) =>
+                              DropdownMenuItem(value: cat, child: Text(cat)),
+                        )
+                        .toList(),
                 onChanged: (value) async {
                   if (value == 'Add Custom Category...') {
                     await _showAddCategoryDialog();
@@ -602,17 +611,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   }
                   return null;
                 },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _productController,
-                decoration: const InputDecoration(
-                  labelText: 'Product/Item Name (Optional)',
-                  border: OutlineInputBorder(),
-                  hintText: 'e.g., Laptop, Coffee, etc.',
-                  prefixIcon: Icon(Icons.shopping_bag),
-                ),
-                textCapitalization: TextCapitalization.words,
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -652,11 +650,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 child: ElevatedButton(
                   onPressed: _saveTransaction,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _type == 'income' ? Colors.green : Colors.red,
+                    backgroundColor:
+                        _type == 'income' ? Colors.green : Colors.red,
                   ),
-                  child: const Text(
-                    'Save Transaction',
-                    style: TextStyle(fontSize: 16, color: Colors.white),
+                  child: Text(
+                    isEditing ? 'Update Transaction' : 'Save Transaction',
+                    style: const TextStyle(fontSize: 16, color: Colors.white),
                   ),
                 ),
               ),
@@ -670,29 +669,34 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Future<void> _saveTransaction() async {
     if (_formKey.currentState!.validate()) {
       final transaction = TransactionModel(
+        id: widget.transaction?.id,
         type: _type,
         amount: double.parse(_amountController.text),
         category: _category,
         description: _descController.text,
-        productName: _productController.text.trim().isEmpty 
-            ? null 
-            : _productController.text.trim(),
         date: _selectedDate,
       );
 
-      await _dbService.insertTransaction(transaction);
-      if (mounted) Navigator.pop(context);
+      if (isEditing) {
+        await _dbService.updateTransaction(transaction);
+      } else {
+        await _dbService.insertTransaction(transaction);
+      }
+
+      if (mounted) Navigator.pop(context, true);
     }
   }
 
   Future<void> _showAddCategoryDialog() async {
     final TextEditingController categoryController = TextEditingController();
-    
+
     return showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: Text('Add ${_type == 'income' ? 'Income' : 'Expense'} Category'),
+          title: Text(
+            'Add ${_type == 'income' ? 'Income' : 'Expense'} Category',
+          ),
           content: TextField(
             controller: categoryController,
             decoration: const InputDecoration(
@@ -736,7 +740,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   void dispose() {
     _amountController.dispose();
     _descController.dispose();
-    _productController.dispose();
     super.dispose();
   }
 }
@@ -757,8 +760,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   List<TransactionModel> transactions = [];
   List<TransactionModel> filteredTransactions = [];
   String searchQuery = '';
-  String selectedFilter = 'All'; // All, Week, Month, Year
-  String viewMode = 'List'; // List or Grouped
+  String selectedFilter = 'All';
+  String viewMode = 'List';
 
   @override
   void initState() {
@@ -776,9 +779,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   void _applyFilters() {
     List<TransactionModel> filtered = List.from(transactions);
-    
-    // In List view, apply date filter for recent periods
-    // In Grouped view, show all transactions (no date filtering)
+
     if (viewMode == 'List') {
       final now = DateTime.now();
       switch (selectedFilter) {
@@ -796,20 +797,20 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           break;
         case 'All':
         default:
-          // No date filtering
           break;
       }
     }
-    // In Grouped mode, no date filtering - show all data grouped
-    
-    // Apply search filter
+
     if (searchQuery.isNotEmpty) {
-      filtered = filtered.where((t) {
-        return t.category.toLowerCase().contains(searchQuery.toLowerCase()) ||
-            t.description.toLowerCase().contains(searchQuery.toLowerCase());
-      }).toList();
+      filtered =
+          filtered.where((t) {
+            return t.category.toLowerCase().contains(
+                  searchQuery.toLowerCase(),
+                ) ||
+                t.description.toLowerCase().contains(searchQuery.toLowerCase());
+          }).toList();
     }
-    
+
     setState(() {
       filteredTransactions = filtered;
     });
@@ -819,7 +820,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     searchQuery = query;
     _applyFilters();
   }
-  
+
   void _changeDateFilter(String filter) {
     setState(() {
       selectedFilter = filter;
@@ -829,48 +830,49 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   Map<String, List<TransactionModel>> _groupTransactionsByWeek() {
     Map<String, List<TransactionModel>> grouped = {};
-    
+
     for (var trans in filteredTransactions) {
       final weekStart = _getWeekStart(trans.date);
       final weekEnd = weekStart.add(const Duration(days: 6));
-      final weekKey = '${DateFormat('dd MMM').format(weekStart)} - ${DateFormat('dd MMM yyyy').format(weekEnd)}';
-      
+      final weekKey =
+          '${DateFormat('dd MMM').format(weekStart)} - ${DateFormat('dd MMM yyyy').format(weekEnd)}';
+
       if (!grouped.containsKey(weekKey)) {
         grouped[weekKey] = [];
       }
       grouped[weekKey]!.add(trans);
     }
-    
+
     return grouped;
   }
 
   Map<String, List<TransactionModel>> _groupTransactionsByMonth() {
     Map<String, List<TransactionModel>> grouped = {};
-    
+
     for (var trans in filteredTransactions) {
       final monthKey = DateFormat('MMMM yyyy').format(trans.date);
-      
+
       if (!grouped.containsKey(monthKey)) {
         grouped[monthKey] = [];
       }
       grouped[monthKey]!.add(trans);
     }
-    
+
     return grouped;
   }
 
   Map<String, List<TransactionModel>> _groupTransactionsByYear() {
     Map<String, List<TransactionModel>> grouped = {};
-    
+
     for (var trans in filteredTransactions) {
       final yearKey = DateFormat('yyyy').format(trans.date);
-      
+
       if (!grouped.containsKey(yearKey)) {
         grouped[yearKey] = [];
       }
       grouped[yearKey]!.add(trans);
     }
-    
+
     return grouped;
   }
 
@@ -878,7 +880,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     return date.subtract(Duration(days: date.weekday - 1));
   }
 
-  double _calculateGroupTotal(List<TransactionModel> transactions, String type) {
+  double _calculateGroupTotal(
+    List<TransactionModel> transactions,
+    String type,
+  ) {
     return transactions
         .where((t) => t.type == type)
         .fold(0.0, (sum, t) => sum + t.amount);
@@ -903,7 +908,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 onChanged: _filterTransactions,
               ),
               const SizedBox(height: 12),
-              // View Mode Toggle
               Row(
                 children: [
                   Expanded(
@@ -925,9 +929,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                         setState(() {
                           viewMode = newSelection.first;
                           if (viewMode == 'Grouped') {
-                            selectedFilter = 'Month'; // Default to Month grouping
+                            selectedFilter = 'Month';
                           } else {
-                            selectedFilter = 'All'; // Default to All in List view
+                            selectedFilter = 'All';
                           }
                         });
                         _applyFilters();
@@ -937,33 +941,32 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              // Filter Chips
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: viewMode == 'List'
-                      ? [
-                          _buildFilterChip('All'),
-                          const SizedBox(width: 8),
-                          _buildFilterChip('This Week'),
-                          const SizedBox(width: 8),
-                          _buildFilterChip('This Month'),
-                          const SizedBox(width: 8),
-                          _buildFilterChip('This Year'),
-                        ]
-                      : [
-                          _buildFilterChip('Week'),
-                          const SizedBox(width: 8),
-                          _buildFilterChip('Month'),
-                          const SizedBox(width: 8),
-                          _buildFilterChip('Year'),
-                        ],
+                  children:
+                      viewMode == 'List'
+                          ? [
+                            _buildFilterChip('All'),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('This Week'),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('This Month'),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('This Year'),
+                          ]
+                          : [
+                            _buildFilterChip('Week'),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('Month'),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('Year'),
+                          ],
                 ),
               ),
             ],
           ),
         ),
-        // Summary for filtered data
         if (filteredTransactions.isNotEmpty)
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -996,21 +999,29 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           ),
         const SizedBox(height: 8),
         Expanded(
-          child: filteredTransactions.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.inbox_outlined, size: 64, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No transactions found',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 16),
-                      ),
-                    ],
-                  ),
-                )
-              : viewMode == 'List'
+          child:
+              filteredTransactions.isEmpty
+                  ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.inbox_outlined,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No transactions found',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                  : viewMode == 'List'
                   ? _buildListView()
                   : _buildGroupedView(),
         ),
@@ -1030,7 +1041,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   Widget _buildGroupedView() {
     Map<String, List<TransactionModel>> groupedData;
-    
+
     switch (selectedFilter) {
       case 'Week':
         groupedData = _groupTransactionsByWeek();
@@ -1044,15 +1055,19 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         break;
     }
 
-    final sortedKeys = groupedData.keys.toList()
-      ..sort((a, b) => b.compareTo(a)); // Sort in descending order (recent first)
+    final sortedKeys =
+        groupedData.keys.toList()..sort((a, b) => b.compareTo(a));
 
     if (sortedKeys.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.calendar_today_outlined, size: 64, color: Colors.grey[400]),
+            Icon(
+              Icons.calendar_today_outlined,
+              size: 64,
+              color: Colors.grey[400],
+            ),
             const SizedBox(height: 16),
             Text(
               'No ${selectedFilter.toLowerCase()}s with transactions',
@@ -1076,7 +1091,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           elevation: 2,
           child: ExpansionTile(
-            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
             childrenPadding: EdgeInsets.zero,
             title: Row(
               children: [
@@ -1084,8 +1102,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   selectedFilter == 'Week'
                       ? Icons.calendar_view_week
                       : selectedFilter == 'Month'
-                          ? Icons.calendar_view_month
-                          : Icons.calendar_today,
+                      ? Icons.calendar_view_month
+                      : Icons.calendar_today,
                   color: Colors.blue,
                   size: 20,
                 ),
@@ -1141,11 +1159,18 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     Expanded(
                       child: Column(
                         children: [
-                          Icon(Icons.arrow_upward, color: Colors.green, size: 20),
+                          Icon(
+                            Icons.arrow_upward,
+                            color: Colors.green,
+                            size: 20,
+                          ),
                           const SizedBox(height: 4),
                           const Text(
                             'Income',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -1159,19 +1184,22 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                         ],
                       ),
                     ),
-                    Container(
-                      width: 1,
-                      height: 50,
-                      color: Colors.grey[300],
-                    ),
+                    Container(width: 1, height: 50, color: Colors.grey[300]),
                     Expanded(
                       child: Column(
                         children: [
-                          Icon(Icons.arrow_downward, color: Colors.red, size: 20),
+                          Icon(
+                            Icons.arrow_downward,
+                            color: Colors.red,
+                            size: 20,
+                          ),
                           const SizedBox(height: 4),
                           const Text(
                             'Expense',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -1188,7 +1216,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   ],
                 ),
               ),
-              ...groupTransactions.map((trans) => _buildTransactionCard(trans, compact: true)),
+              ...groupTransactions.map(
+                (trans) => _buildTransactionCard(trans, compact: true),
+              ),
             ],
           ),
         );
@@ -1197,52 +1227,91 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   }
 
   Widget _buildTransactionCard(TransactionModel trans, {bool compact = false}) {
-    return Dismissible(
-      key: Key(trans.id.toString()),
-      background: Container(
-        color: Colors.red,
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        child: const Icon(Icons.delete, color: Colors.white),
+    return ListTile(
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: compact ? 32 : 16,
+        vertical: 8,
       ),
-      direction: DismissDirection.endToStart,
-      onDismissed: (direction) async {
-        await _dbService.deleteTransaction(trans.id!);
-        _loadTransactions();
-      },
-      child: ListTile(
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: compact ? 32 : 16,
-          vertical: 8,
+      leading: CircleAvatar(
+        backgroundColor:
+            trans.type == 'income'
+                ? Colors.green.withOpacity(0.2)
+                : Colors.red.withOpacity(0.2),
+        child: Icon(
+          trans.type == 'income' ? Icons.add : Icons.remove,
+          color: trans.type == 'income' ? Colors.green : Colors.red,
         ),
-        leading: CircleAvatar(
-          backgroundColor: trans.type == 'income'
-              ? Colors.green.withOpacity(0.2)
-              : Colors.red.withOpacity(0.2),
-          child: Icon(
-            trans.type == 'income' ? Icons.add : Icons.remove,
-            color: trans.type == 'income' ? Colors.green : Colors.red,
+      ),
+      title: Text(trans.category),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (trans.description.isNotEmpty) Text(trans.description),
+          Text(
+            DateFormat('dd MMM yyyy, hh:mm a').format(trans.date),
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
           ),
-        ),
-        title: Text(trans.category),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (trans.description.isNotEmpty) Text(trans.description),
-            Text(
-              DateFormat('dd MMM yyyy, hh:mm a').format(trans.date),
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        ],
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '₹${trans.amount.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: trans.type == 'income' ? Colors.green : Colors.red,
             ),
-          ],
-        ),
-        trailing: Text(
-          '₹${trans.amount.toStringAsFixed(2)}',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: trans.type == 'income' ? Colors.green : Colors.red,
           ),
-        ),
+          const SizedBox(width: 8),
+          PopupMenuButton<String>(
+            onSelected: (value) async {
+              if (value == 'edit') {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) => AddTransactionScreen(transaction: trans),
+                  ),
+                );
+                _loadTransactions();
+              } else if (value == 'delete') {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder:
+                      (dialogContext) => AlertDialog(
+                        title: const Text('Confirm delete'),
+                        content: const Text(
+                          'Are you sure you want to delete this transaction?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed:
+                                () => Navigator.of(dialogContext).pop(false),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed:
+                                () => Navigator.of(dialogContext).pop(true),
+                            child: const Text('Delete'),
+                          ),
+                        ],
+                      ),
+                );
+                if (confirmed == true) {
+                  await _dbService.deleteTransaction(trans.id!);
+                  _loadTransactions();
+                }
+              }
+            },
+            itemBuilder:
+                (context) => [
+                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                ],
+          ),
+        ],
       ),
     );
   }
@@ -1338,9 +1407,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
-          _buildReportCard('Total Income', summary['income'] ?? 0, Colors.green),
+          _buildReportCard(
+            'Total Income',
+            summary['income'] ?? 0,
+            Colors.green,
+          ),
           const SizedBox(height: 12),
-          _buildReportCard('Total Expense', summary['expense'] ?? 0, Colors.red),
+          _buildReportCard(
+            'Total Expense',
+            summary['expense'] ?? 0,
+            Colors.red,
+          ),
           const SizedBox(height: 12),
           _buildReportCard('Net Balance', summary['balance'] ?? 0, Colors.blue),
           const SizedBox(height: 32),
@@ -1352,9 +1429,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            _buildExportButton('Export as PDF', Icons.picture_as_pdf, _exportAsPDF),
-            _buildExportButton('Export as Excel', Icons.table_chart, _exportAsExcel),
-            _buildExportButton('Export as CSV', Icons.file_present, _exportAsCSV),
+            _buildExportButton(
+              'Export as PDF',
+              Icons.picture_as_pdf,
+              _exportAsPDF,
+            ),
+            _buildExportButton(
+              'Export as Excel',
+              Icons.table_chart,
+              _exportAsExcel,
+            ),
+            _buildExportButton(
+              'Export as CSV',
+              Icons.file_present,
+              _exportAsCSV,
+            ),
           ],
         ],
       ),
@@ -1417,39 +1506,64 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 level: 0,
                 child: pw.Text(
                   'Cash Book Report',
-                  style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
+                  style: pw.TextStyle(
+                    fontSize: 24,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
                 ),
               ),
               pw.SizedBox(height: 20),
-              
-              // Summary Section
+
               pw.Container(
                 padding: const pw.EdgeInsets.all(10),
                 decoration: pw.BoxDecoration(
                   border: pw.Border.all(color: PdfColors.grey300),
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5)),
+                  borderRadius: const pw.BorderRadius.all(
+                    pw.Radius.circular(5),
+                  ),
                 ),
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text('Financial Summary', 
-                      style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                    pw.Text(
+                      'Financial Summary',
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
                     pw.SizedBox(height: 10),
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text('Total Income:', style: const pw.TextStyle(fontSize: 14)),
-                        pw.Text('₹${summary['income']?.toStringAsFixed(2) ?? '0.00'}',
-                          style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(
+                          'Total Income:',
+                          style: const pw.TextStyle(fontSize: 14),
+                        ),
+                        pw.Text(
+                          '₹${summary['income']?.toStringAsFixed(2) ?? '0.00'}',
+                          style: pw.TextStyle(
+                            fontSize: 14,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                     pw.SizedBox(height: 5),
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text('Total Expense:', style: const pw.TextStyle(fontSize: 14)),
-                        pw.Text('₹${summary['expense']?.toStringAsFixed(2) ?? '0.00'}',
-                          style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(
+                          'Total Expense:',
+                          style: const pw.TextStyle(fontSize: 14),
+                        ),
+                        pw.Text(
+                          '₹${summary['expense']?.toStringAsFixed(2) ?? '0.00'}',
+                          style: pw.TextStyle(
+                            fontSize: 14,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                     pw.SizedBox(height: 5),
@@ -1457,32 +1571,53 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text('Net Balance:', 
-                          style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
-                        pw.Text('₹${summary['balance']?.toStringAsFixed(2) ?? '0.00'}',
-                          style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(
+                          'Net Balance:',
+                          style: pw.TextStyle(
+                            fontSize: 16,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                        pw.Text(
+                          '₹${summary['balance']?.toStringAsFixed(2) ?? '0.00'}',
+                          style: pw.TextStyle(
+                            fontSize: 16,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                   ],
                 ),
               ),
               pw.SizedBox(height: 30),
-              
-              // Transactions Table
-              pw.Text('All Transactions', 
-                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+
+              pw.Text(
+                'All Transactions',
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
               pw.SizedBox(height: 10),
               pw.Table.fromTextArray(
                 headers: ['Date', 'Type', 'Category', 'Description', 'Amount'],
-                data: allTransactions.map((t) => [
-                  DateFormat('dd/MM/yyyy').format(t.date),
-                  t.type.toUpperCase(),
-                  t.category,
-                  t.description.isEmpty ? '-' : t.description,
-                  '₹${t.amount.toStringAsFixed(2)}',
-                ]).toList(),
+                data:
+                    allTransactions
+                        .map(
+                          (t) => [
+                            DateFormat('dd/MM/yyyy').format(t.date),
+                            t.type.toUpperCase(),
+                            t.category,
+                            t.description.isEmpty ? '-' : t.description,
+                            '₹${t.amount.toStringAsFixed(2)}',
+                          ],
+                        )
+                        .toList(),
                 headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                headerDecoration: const pw.BoxDecoration(
+                  color: PdfColors.grey300,
+                ),
                 cellHeight: 30,
                 cellAlignments: {
                   0: pw.Alignment.centerLeft,
@@ -1497,10 +1632,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
         ),
       );
 
-      // Save and share
       await Printing.sharePdf(
         bytes: await pdf.save(),
-        filename: 'cashbook_report_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf',
+        filename:
+            'cashbook_report_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf',
       );
 
       if (mounted) {
@@ -1510,9 +1645,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error exporting PDF: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error exporting PDF: $e')));
       }
     } finally {
       setState(() => isExporting = false);
@@ -1525,7 +1660,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
       var excel = excel_lib.Excel.createExcel();
       excel_lib.Sheet sheetObject = excel['CashBook'];
 
-      // Add headers
       sheetObject.appendRow([
         excel_lib.TextCellValue('Date'),
         excel_lib.TextCellValue('Type'),
@@ -1534,18 +1668,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
         excel_lib.TextCellValue('Amount'),
       ]);
 
-      // Add data
       for (var trans in allTransactions) {
         sheetObject.appendRow([
           excel_lib.TextCellValue(DateFormat('dd/MM/yyyy').format(trans.date)),
           excel_lib.TextCellValue(trans.type.toUpperCase()),
           excel_lib.TextCellValue(trans.category),
-          excel_lib.TextCellValue(trans.description.isEmpty ? '-' : trans.description),
+          excel_lib.TextCellValue(
+            trans.description.isEmpty ? '-' : trans.description,
+          ),
           excel_lib.DoubleCellValue(trans.amount),
         ]);
       }
 
-      // Add summary at the end
       sheetObject.appendRow([excel_lib.TextCellValue('')]);
       sheetObject.appendRow([
         excel_lib.TextCellValue('Total Income:'),
@@ -1569,18 +1703,19 @@ class _ReportsScreenState extends State<ReportsScreen> {
         excel_lib.DoubleCellValue(summary['balance'] ?? 0),
       ]);
 
-      // Save file
       var fileBytes = excel.save();
       final directory = await getApplicationDocumentsDirectory();
-      final fileName = 'cashbook_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+      final fileName =
+          'cashbook_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
       final filePath = '${directory.path}/$fileName';
-      
+
       File(filePath)
         ..createSync(recursive: true)
         ..writeAsBytesSync(fileBytes!);
 
-      // Share file
-      await Share.shareXFiles([XFile(filePath)], text: 'Cash Book Excel Report');
+      await Share.shareXFiles([
+        XFile(filePath),
+      ], text: 'Cash Book Excel Report');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1589,9 +1724,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error exporting Excel: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error exporting Excel: $e')));
       }
     } finally {
       setState(() => isExporting = false);
@@ -1602,7 +1737,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     setState(() => isExporting = true);
     try {
       String csv = 'Date,Type,Category,Description,Amount\n';
-      
+
       for (var trans in allTransactions) {
         csv += '${DateFormat('dd/MM/yyyy').format(trans.date)},';
         csv += '${trans.type.toUpperCase()},';
@@ -1611,21 +1746,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
         csv += '${trans.amount}\n';
       }
 
-      // Add summary
       csv += '\n';
       csv += 'Total Income,,,₹,${summary['income'] ?? 0}\n';
       csv += 'Total Expense,,,₹,${summary['expense'] ?? 0}\n';
       csv += 'Net Balance,,,₹,${summary['balance'] ?? 0}\n';
 
       final directory = await getApplicationDocumentsDirectory();
-      final fileName = 'cashbook_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv';
+      final fileName =
+          'cashbook_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv';
       final filePath = '${directory.path}/$fileName';
-      
+
       File(filePath)
         ..createSync(recursive: true)
         ..writeAsStringSync(csv);
 
-      // Share file
       await Share.shareXFiles([XFile(filePath)], text: 'Cash Book CSV Report');
 
       if (mounted) {
@@ -1635,9 +1769,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error exporting CSV: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error exporting CSV: $e')));
       }
     } finally {
       setState(() => isExporting = false);
@@ -1646,22 +1780,23 @@ class _ReportsScreenState extends State<ReportsScreen> {
 }
 
 // ============================================================================
-// PRODUCT ANALYTICS SCREEN
+// CATEGORY ANALYTICS SCREEN (CHANGED FROM PRODUCT ANALYTICS)
 // ============================================================================
 
-class ProductAnalyticsScreen extends StatefulWidget {
-  const ProductAnalyticsScreen({Key? key}) : super(key: key);
+class CategoryAnalyticsScreen extends StatefulWidget {
+  const CategoryAnalyticsScreen({Key? key}) : super(key: key);
 
   @override
-  State<ProductAnalyticsScreen> createState() => _ProductAnalyticsScreenState();
+  State<CategoryAnalyticsScreen> createState() =>
+      _CategoryAnalyticsScreenState();
 }
 
-class _ProductAnalyticsScreenState extends State<ProductAnalyticsScreen> {
+class _CategoryAnalyticsScreenState extends State<CategoryAnalyticsScreen> {
   final DatabaseService _dbService = DatabaseService();
   List<TransactionModel> allTransactions = [];
-  List<String> productNames = [];
-  String? selectedProduct;
-  String selectedPeriod = 'Month'; // Week, Month, Year
+  List<String> categories = [];
+  String? selectedCategory;
+  String selectedPeriod = 'Month';
 
   @override
   void initState() {
@@ -1671,36 +1806,33 @@ class _ProductAnalyticsScreenState extends State<ProductAnalyticsScreen> {
 
   Future<void> _loadData() async {
     final trans = await _dbService.getTransactions();
-    final products = trans
-        .where((t) => t.productName != null && t.productName!.isNotEmpty)
-        .map((t) => t.productName!)
-        .toSet()
-        .toList();
-    
+    final cats = trans.map((t) => t.category).toSet().toList();
+
     setState(() {
       allTransactions = trans;
-      productNames = products;
+      categories = cats;
     });
   }
 
-  List<TransactionModel> _getProductTransactions() {
-    if (selectedProduct == null) return [];
+  List<TransactionModel> _getCategoryTransactions() {
+    if (selectedCategory == null) return [];
     return allTransactions
-        .where((t) => t.productName == selectedProduct)
+        .where((t) => t.category == selectedCategory)
         .toList();
   }
 
   Map<String, List<TransactionModel>> _groupByPeriod() {
-    final productTrans = _getProductTransactions();
+    final categoryTrans = _getCategoryTransactions();
     Map<String, List<TransactionModel>> grouped = {};
 
-    for (var trans in productTrans) {
+    for (var trans in categoryTrans) {
       String key;
       switch (selectedPeriod) {
         case 'Week':
           final weekStart = _getWeekStart(trans.date);
           final weekEnd = weekStart.add(const Duration(days: 6));
-          key = '${DateFormat('dd MMM').format(weekStart)} - ${DateFormat('dd MMM yyyy').format(weekEnd)}';
+          key =
+              '${DateFormat('dd MMM').format(weekStart)} - ${DateFormat('dd MMM yyyy').format(weekEnd)}';
           break;
         case 'Year':
           key = DateFormat('yyyy').format(trans.date);
@@ -1735,7 +1867,6 @@ class _ProductAnalyticsScreenState extends State<ProductAnalyticsScreen> {
     return Scaffold(
       body: Column(
         children: [
-          // Product Selection
           Container(
             padding: const EdgeInsets.all(16),
             color: Colors.blue.withOpacity(0.1),
@@ -1743,38 +1874,35 @@ class _ProductAnalyticsScreenState extends State<ProductAnalyticsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Product Analytics',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  'Category Analytics',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: selectedProduct,
+                  value: selectedCategory,
                   decoration: const InputDecoration(
-                    labelText: 'Select Product/Item',
+                    labelText: 'Select Category',
                     border: OutlineInputBorder(),
                     filled: true,
                     fillColor: Colors.white,
-                    prefixIcon: Icon(Icons.shopping_bag),
+                    prefixIcon: Icon(Icons.category),
                   ),
-                  hint: const Text('Choose a product to analyze'),
-                  items: productNames.map((product) {
-                    return DropdownMenuItem(
-                      value: product,
-                      child: Text(product),
-                    );
-                  }).toList(),
+                  hint: const Text('Choose a category to analyze'),
+                  items:
+                      categories.map((category) {
+                        return DropdownMenuItem(
+                          value: category,
+                          child: Text(category),
+                        );
+                      }).toList(),
                   onChanged: (value) {
                     setState(() {
-                      selectedProduct = value;
+                      selectedCategory = value;
                     });
                   },
                 ),
-                if (selectedProduct != null) ...[
+                if (selectedCategory != null) ...[
                   const SizedBox(height: 16),
-                  // Period Selection
                   Row(
                     children: [
                       Expanded(
@@ -1810,42 +1938,42 @@ class _ProductAnalyticsScreenState extends State<ProductAnalyticsScreen> {
               ],
             ),
           ),
-          // Analytics Display
           Expanded(
-            child: selectedProduct == null
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.shopping_bag_outlined,
-                          size: 80,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          productNames.isEmpty
-                              ? 'No products tracked yet'
-                              : 'Select a product to view analytics',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 16,
+            child:
+                selectedCategory == null
+                    ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.category_outlined,
+                            size: 80,
+                            color: Colors.grey[400],
                           ),
-                        ),
-                        if (productNames.isEmpty) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 16),
                           Text(
-                            'Add product names when creating transactions',
+                            categories.isEmpty
+                                ? 'No categories yet'
+                                : 'Select a category to view analytics',
                             style: TextStyle(
-                              color: Colors.grey[500],
-                              fontSize: 14,
+                              color: Colors.grey[600],
+                              fontSize: 16,
                             ),
                           ),
+                          if (categories.isEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Add transactions to create categories',
+                              style: TextStyle(
+                                color: Colors.grey[500],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  )
-                : _buildAnalytics(),
+                      ),
+                    )
+                    : _buildAnalytics(),
           ),
         ],
       ),
@@ -1853,18 +1981,17 @@ class _ProductAnalyticsScreenState extends State<ProductAnalyticsScreen> {
   }
 
   Widget _buildAnalytics() {
-    final productTrans = _getProductTransactions();
+    final categoryTrans = _getCategoryTransactions();
     final groupedData = _groupByPeriod();
-    final sortedKeys = groupedData.keys.toList()
-      ..sort((a, b) => b.compareTo(a));
+    final sortedKeys =
+        groupedData.keys.toList()..sort((a, b) => b.compareTo(a));
 
-    final totalIncome = _calculateTotal(productTrans, 'income');
-    final totalExpense = _calculateTotal(productTrans, 'expense');
+    final totalIncome = _calculateTotal(categoryTrans, 'income');
+    final totalExpense = _calculateTotal(categoryTrans, 'expense');
     final netAmount = totalIncome - totalExpense;
 
     return Column(
       children: [
-        // Overall Summary
         Container(
           margin: const EdgeInsets.all(16),
           padding: const EdgeInsets.all(20),
@@ -1886,7 +2013,7 @@ class _ProductAnalyticsScreenState extends State<ProductAnalyticsScreen> {
           child: Column(
             children: [
               Text(
-                selectedProduct!,
+                selectedCategory!,
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -1895,7 +2022,7 @@ class _ProductAnalyticsScreenState extends State<ProductAnalyticsScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Total: ${productTrans.length} transactions',
+                'Total: ${categoryTrans.length} transactions',
                 style: const TextStyle(color: Colors.white70, fontSize: 14),
               ),
               const SizedBox(height: 20),
@@ -1932,15 +2059,15 @@ class _ProductAnalyticsScreenState extends State<ProductAnalyticsScreen> {
                   children: [
                     const Text(
                       'Net: ',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                      ),
+                      style: TextStyle(color: Colors.white, fontSize: 16),
                     ),
                     Text(
                       '₹${netAmount.toStringAsFixed(2)}',
                       style: TextStyle(
-                        color: netAmount >= 0 ? Colors.green[200] : Colors.red[200],
+                        color:
+                            netAmount >= 0
+                                ? Colors.green[200]
+                                : Colors.red[200],
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1951,7 +2078,6 @@ class _ProductAnalyticsScreenState extends State<ProductAnalyticsScreen> {
             ],
           ),
         ),
-        // Period-wise breakdown
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
@@ -2058,17 +2184,23 @@ class _ProductAnalyticsScreenState extends State<ProductAnalyticsScreen> {
                         dense: true,
                         leading: CircleAvatar(
                           radius: 16,
-                          backgroundColor: trans.type == 'income'
-                              ? Colors.green.withOpacity(0.2)
-                              : Colors.red.withOpacity(0.2),
+                          backgroundColor:
+                              trans.type == 'income'
+                                  ? Colors.green.withOpacity(0.2)
+                                  : Colors.red.withOpacity(0.2),
                           child: Icon(
                             trans.type == 'income' ? Icons.add : Icons.remove,
                             size: 16,
-                            color: trans.type == 'income' ? Colors.green : Colors.red,
+                            color:
+                                trans.type == 'income'
+                                    ? Colors.green
+                                    : Colors.red,
                           ),
                         ),
                         title: Text(
-                          trans.category,
+                          trans.description.isEmpty
+                              ? 'No description'
+                              : trans.description,
                           style: const TextStyle(fontSize: 14),
                         ),
                         subtitle: Text(
@@ -2079,7 +2211,10 @@ class _ProductAnalyticsScreenState extends State<ProductAnalyticsScreen> {
                           '₹${trans.amount.toStringAsFixed(2)}',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            color: trans.type == 'income' ? Colors.green : Colors.red,
+                            color:
+                                trans.type == 'income'
+                                    ? Colors.green
+                                    : Colors.red,
                           ),
                         ),
                       );
@@ -2094,7 +2229,12 @@ class _ProductAnalyticsScreenState extends State<ProductAnalyticsScreen> {
     );
   }
 
-  Widget _buildSummaryBox(String label, double amount, IconData icon, Color color) {
+  Widget _buildSummaryBox(
+    String label,
+    double amount,
+    IconData icon,
+    Color color,
+  ) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -2123,7 +2263,12 @@ class _ProductAnalyticsScreenState extends State<ProductAnalyticsScreen> {
     );
   }
 
-  Widget _buildPeriodStat(String label, double amount, IconData icon, Color color) {
+  Widget _buildPeriodStat(
+    String label,
+    double amount,
+    IconData icon,
+    Color color,
+  ) {
     return Column(
       children: [
         Icon(icon, color: color, size: 20),
